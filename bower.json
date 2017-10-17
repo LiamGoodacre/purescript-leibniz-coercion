@@ -1,0 +1,21 @@
+{
+  "name": "purescript-leibniz-coercion",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "^3.1.0",
+    "purescript-console": "^3.0.0",
+    "purescript-leibniz": "^4.1.0",
+    "purescript-typelevel-prelude": "^2.5.0",
+    "purescript-either": "^3.1.0",
+    "purescript-identity": "^3.1.0",
+    "purescript-tuples": "^4.1.0"
+  },
+  "devDependencies": {
+    "purescript-psci-support": "^3.0.0"
+  }
+}
