@@ -12,7 +12,7 @@ import Data.Identity (Identity)
 --import Data.Identity (Identity(..))
 --import Data.Newtype (unwrap)
 import Data.Tuple.Nested (type (/\))
-import Type.Data.Boolean (class And, class Or, True, False, kind Boolean)
+import Type.Data.Boolean (class Or, True, False, kind Boolean)
 
 
 -- e.g: expand `f a ~ g b` to `f ~ g` and `a ~ b`
@@ -33,49 +33,104 @@ instance elabContextAnd
      )
   => ElabContext (l /\ r) (o0 /\ o1)
 
+foreign import kind List
+foreign import data Nl :: List
+foreign import data Cn :: Type -> List -> List
+
+class EquivTo (all :: Type)
+              (eq :: Type)
+              (seen :: List)
+              (a :: Type)
+              (b :: Type)
+              (out :: Boolean)
+              | all eq seen a b -> out
+instance equivToLeibLeft
+  :: Equate all all s @a @x out
+  => EquivTo all (@b ~ @x) s @a @b out
+else
+instance equivToLeibRight
+  :: Equate all all s @a @x out
+  => EquivTo all (@x ~ @b) s @a @b out
+else
+instance equivToLeibOther
+  :: EquivTo all (@a ~ @b) s @i @o False
+else
+instance equivToAnd
+  :: ( EquivTo all l s @a @b lout
+     , EquivTo all r s @a @b rout
+     , Or lout rout out
+     )
+  => EquivTo all (l /\ r) s @a @b out
+
+class Seen (ctx :: List)
+           t
+           (out :: Boolean)
+           | ctx t -> out
+instance seenNl
+  :: Seen Nl @typ False
+else
+instance seenCnY
+  :: Seen (Cn @typ tl) @typ True
+else
+instance seenCnR
+  :: Seen tl @typ out
+  => Seen (Cn @hd tl) @typ out
+
 
 -- given an equality context `eq`, equate `i` and `o` but allow them to
 -- differ by entries in the context
-class Equate eq l r (out :: Boolean) | eq l r -> out
+class Equate all eq (seen :: List) l r (out :: Boolean) | eq seen l r -> out
 instance equateRefl
-  :: Equate eq @a @a True
+  :: Equate all eq s @a @a True
 else
 instance equateDiffSubst
-  :: Equate (@a ~ @b) @a @b True
+  :: Equate all (@a ~ @b) s @a @b True
 else
 instance equateDiffSymm
-  :: Equate (@b ~ @a) @a @b True
+  :: Equate all (@b ~ @a) s @a @b True
+else
+instance equateElse
+  :: ( Seen s @b isSeen
+     , EquateIfNotSeen isSeen all eq s @a @b o
+     )
+  => Equate all eq s @a @b o
 else
 instance equateDiffAnd
-  :: ( Equate l @a @b lo
-     , Equate r @a @b ro
+  :: ( Equate all l s @a @b lo
+     , Equate all r s @a @b ro
      , Or lo ro o
      )
-  => Equate (l /\ r) @a @b o
-else
-instance equateF
-  :: ( Equate eq @f @g lo
-     , Equate eq @a @b ro
-     , And lo ro o
-     )
-  => Equate eq @(f a) @(g b) o
+  => Equate all (l /\ r) s @a @b o
 else
 instance equateNope
-  :: Equate eq @a @b False
+  :: Equate all eq s @a @b False
 
-
+class EquateIfNotSeen (isSeen :: Boolean)
+                      all
+                      eq
+                      (seen :: List)
+                      l
+                      r
+                      (out :: Boolean)
+                      | isSeen all eq seen l r -> out
+instance equateIfNotSeenFalse
+  :: EquivTo all eq (Cn @b s) @a @b out
+  => EquateIfNotSeen False all eq s @a @b out
+else
+instance equateIfNotSeenTrue
+  :: EquateIfNotSeen True all eq s @a @b False
 
 -- given an equality between `a` and `b`, structurally walk and equate `f` and
 -- `g` but allow them to differ by `a` and `b` recursively in any parameter
 class Substitute eq f g
 instance substApp
-  :: ( Substitute eq @i @o
-     , Substitute eq @f @g
+  :: ( Substitute eq @f @g
+     , Substitute eq @i @o
      )
   => Substitute eq @(f i) @(g o)
 else
 instance substTerm
-  :: Equate eq @f @g True
+  :: Equate eq eq Nl @f @g True
   => Substitute eq @f @g
 
 -- substitute without the proxies
@@ -92,20 +147,26 @@ coerced :: forall eq ctx f g.
   eq -> f -> g
 coerced _ f = unsafeCoerce f
 
-infix 4 coerced as <~>
+infix 4 coerced as ~$
 
 
 -- coercion example
 
 example ::
   (@(Identity Int) ~ @(Array String)) /\ (@String ~ @Boolean) ->
-  Either (Identity String) Int
-example l = l <~> (Left [true] :: Either (Array Boolean) String)
+  Either (Identity Int) Int
+example l = l ~$ (Left [true] :: Either (Array Boolean) String)
 
-example0 ::
-  @(foo :: Int) ~ @(bar :: String) ->
-  {bar :: String}
-example0 l = l <~> {foo: 42}
+
+example' :: forall a b c d e.
+  (@a ~ @b) /\
+  (@c ~ @b) /\
+  (@d ~ @b) /\
+  (@c ~ @e) /\
+  (@e ~ @d) ->
+  a -> e
+example' l a = l ~$ a
+  
 
 
 {-
